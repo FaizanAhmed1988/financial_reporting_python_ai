@@ -1,16 +1,65 @@
-﻿__pycache__/
+# Byte-compiled / optimized / DLL files
+__pycache__/
 *.py[cod]
-*.pyo
-.env
-.venv
-venv/
-*.egg-info/
-dist/
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+.env.local
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Streamlit
+.streamlit/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data (Keep synthetic and processed, exclude raw real data)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Output files
+reports/excel/*
+!reports/excel/.gitkeep
+reports/management_reports/*
+!reports/management_reports/.gitkeep
+
+# OS specific
 .DS_Store
 Thumbs.db
-*.log
-data/raw/*.xlsx
-data/raw/*.csv
-data/processed/
-.streamlit/secrets.toml

@@ -23,6 +23,8 @@ from src.anomaly_detection import run_ml_anomaly_detection
 from src.forecasting import generate_forecast
 from src.scenario_analysis import run_scenarios
 from src.reporting import generate_excel_report
+from src.month_end_close import build_checklist
+from src.file_upload import render_upload_section
 from pathlib import Path as _Path
 
 st.set_page_config(page_title="Financial Reporting AI", layout="wide")
@@ -58,11 +60,13 @@ try:
     controls_findings = run_control_tests(wb.gl)
     ml_anomalies = run_ml_anomaly_detection(wb.gl)
     forecast_results = generate_forecast(wb.tb, coa_classified, wb.gl)
+    mec_df = build_checklist(bs_metrics, cf_metrics, rec_metrics, coa_classified)
     
     # Navigation Sidebar
     st.sidebar.title("Navigation")
     pages = ["Executive Summary", "Financial Statements", "Ratios & Working Capital", 
-             "Sub-Ledgers", "Controls & AI", "Scenario Analysis"]
+             "Sub-Ledgers", "Controls & AI", "Scenario Analysis", "Month-End Close",
+             "Upload Financial Data"]
     selection = st.sidebar.radio("Go to", pages)
     
     st.sidebar.markdown("---")
@@ -200,6 +204,28 @@ try:
             scenario_df[c] = scenario_df[c].apply(lambda x: f"{x:,.0f}")
             
         st.dataframe(scenario_df, use_container_width=True, hide_index=True)
+        
+    elif selection == "Month-End Close":
+        st.header("Month-End Close Checklist")
+        st.markdown("Status is derived dynamically from actual dataset completeness. 'Completed' means the action is verifiably supported by the available data.")
+        
+        # Color coding function for status
+        def color_status(val):
+            if "Completed" in str(val):
+                color = "green"
+            elif "Pending" in str(val):
+                color = "orange"
+            elif "Exception" in str(val):
+                color = "red"
+            else:
+                color = "grey"
+            return f'color: {color}; font-weight: bold'
+            
+        styled_df = mec_df.style.map(color_status, subset=['Status'])
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+    elif selection == "Upload Financial Data":
+        render_upload_section()
 
 except Exception as e:
     st.error(f"Application Error: {e}")
