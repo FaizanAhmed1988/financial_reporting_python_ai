@@ -1,0 +1,15 @@
+account_code,account_name,grouping_label,pl_category,budget_amount
+4000,Sales Revenue,Sales Revenue,Revenue,516600.0
+4100,Service Revenue,Service Revenue,Revenue,470100.0
+5000,Cost of Goods Sold,Cost of Goods Sold,Cost of Sales,296700.0
+5100,Salaries Expense,Salaries & Employee Benefits,Operating Expenses,733700.0
+5200,Rent Expense,Rent & Occupancy,Operating Expenses,79500.0
+5300,Utilities Expense,Utilities,Operating Expenses,147700.0
+5400,Depreciation Expense,Depreciation & Amortisation,Operating Expenses,148700.0
+5500,Office Supplies Expense,Office & Administration,Operating Expenses,59600.0
+5600,Insurance Expense,Insurance,Operating Expenses,56500.0
+5900,Advertising Expense,Advertising & Marketing,Operating Expenses,69300.0
+6000,Repairs & Maintenance Expense,Repairs & Maintenance,Operating Expenses,43500.0
+6100,Miscellaneous Expense,Miscellaneous Expenses,Operating Expenses,50400.0
+5700,Interest Expense,Interest Expense,Finance Costs,82600.0
+5800,Bank Charges,Bank Charges,Finance Costs,10800.0

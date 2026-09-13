@@ -1,0 +1,383 @@
+{
+  "workbook": "GL_COA_TB_Dummy_Dataset.xlsx",
+  "sheet_names": [
+    "Chart of Accounts",
+    "Opening Balances-TB",
+    "General Ledger",
+    "Trial Balance"
+  ],
+  "sheet_details": {
+    "Chart of Accounts": {
+      "rows": 32,
+      "columns": 4,
+      "column_names": [
+        "Chart of Accounts",
+        "Unnamed: 1",
+        "Unnamed: 2",
+        "Unnamed: 3"
+      ],
+      "dtypes": {
+        "Chart of Accounts": "str",
+        "Unnamed: 1": "str",
+        "Unnamed: 2": "str",
+        "Unnamed: 3": "str"
+      },
+      "missing_values": {
+        "Chart of Accounts": 1,
+        "Unnamed: 1": 2,
+        "Unnamed: 2": 2,
+        "Unnamed: 3": 2
+      },
+      "missing_pct": {
+        "Chart of Accounts": 3.12,
+        "Unnamed: 1": 6.25,
+        "Unnamed: 2": 6.25,
+        "Unnamed: 3": 6.25
+      },
+      "duplicate_rows": 0,
+      "sample_rows": [
+        {
+          "Chart of Accounts": "Dummy dataset - Company: Sample Trading Co.",
+          "Unnamed: 1": NaN,
+          "Unnamed: 2": NaN,
+          "Unnamed: 3": NaN
+        },
+        {
+          "Chart of Accounts": NaN,
+          "Unnamed: 1": NaN,
+          "Unnamed: 2": NaN,
+          "Unnamed: 3": NaN
+        },
+        {
+          "Chart of Accounts": "Account Code",
+          "Unnamed: 1": "Account Name",
+          "Unnamed: 2": "Account Type",
+          "Unnamed: 3": "Normal Balance"
+        },
+        {
+          "Chart of Accounts": "1000",
+          "Unnamed: 1": "Cash in Hand",
+          "Unnamed: 2": "Asset",
+          "Unnamed: 3": "Debit"
+        },
+        {
+          "Chart of Accounts": "1010",
+          "Unnamed: 1": "Bank Account - Main",
+          "Unnamed: 2": "Asset",
+          "Unnamed: 3": "Debit"
+        }
+      ],
+      "detected_columns": {
+        "account_code": null,
+        "account_name": null,
+        "category": null,
+        "sub_category": null,
+        "department": null,
+        "currency": null
+      },
+      "sheet_type": "Chart of Accounts"
+    },
+    "Opening Balances-TB": {
+      "rows": 35,
+      "columns": 4,
+      "column_names": [
+        "Opening Trial Balance",
+        "Unnamed: 1",
+        "Unnamed: 2",
+        "Unnamed: 3"
+      ],
+      "dtypes": {
+        "Opening Trial Balance": "str",
+        "Unnamed: 1": "str",
+        "Unnamed: 2": "str",
+        "Unnamed: 3": "str"
+      },
+      "missing_values": {
+        "Opening Trial Balance": 4,
+        "Unnamed: 1": 3,
+        "Unnamed: 2": 25,
+        "Unnamed: 3": 25
+      },
+      "missing_pct": {
+        "Opening Trial Balance": 11.43,
+        "Unnamed: 1": 8.57,
+        "Unnamed: 2": 71.43,
+        "Unnamed: 3": 71.43
+      },
+      "duplicate_rows": 1,
+      "label": "Opening Trial Balance",
+      "sample_rows": [
+        {
+          "Opening Trial Balance": "As at 01-Jan-2026",
+          "Unnamed: 1": NaN,
+          "Unnamed: 2": NaN,
+          "Unnamed: 3": NaN
+        },
+        {
+          "Opening Trial Balance": NaN,
+          "Unnamed: 1": NaN,
+          "Unnamed: 2": NaN,
+          "Unnamed: 3": NaN
+        },
+        {
+          "Opening Trial Balance": "Account Code",
+          "Unnamed: 1": "Account Name",
+          "Unnamed: 2": "Opening Debit",
+          "Unnamed: 3": "Opening Credit"
+        },
+        {
+          "Opening Trial Balance": "1000",
+          "Unnamed: 1": "Cash in Hand",
+          "Unnamed: 2": "500000",
+          "Unnamed: 3": NaN
+        },
+        {
+          "Opening Trial Balance": "1010",
+          "Unnamed: 1": "Bank Account - Main",
+          "Unnamed: 2": "2500000",
+          "Unnamed: 3": NaN
+        }
+      ],
+      "detected_columns": {
+        "account_code": null,
+        "account_name": null,
+        "debit": null,
+        "credit": null,
+        "balance": null,
+        "category": null
+      },
+      "sheet_type": "Opening Trial Balance"
+    },
+    "General Ledger": {
+      "rows": 204,
+      "columns": 8,
+      "column_names": [
+        "General Ledger",
+        "Unnamed: 1",
+        "Unnamed: 2",
+        "Unnamed: 3",
+        "Unnamed: 4",
+        "Unnamed: 5",
+        "Unnamed: 6",
+        "Unnamed: 7"
+      ],
+      "dtypes": {
+        "General Ledger": "str",
+        "Unnamed: 1": "str",
+        "Unnamed: 2": "str",
+        "Unnamed: 3": "str",
+        "Unnamed: 4": "str",
+        "Unnamed: 5": "str",
+        "Unnamed: 6": "str",
+        "Unnamed: 7": "str"
+      },
+      "missing_values": {
+        "General Ledger": 2,
+        "Unnamed: 1": 3,
+        "Unnamed: 2": 3,
+        "Unnamed: 3": 3,
+        "Unnamed: 4": 2,
+        "Unnamed: 5": 102,
+        "Unnamed: 6": 102,
+        "Unnamed: 7": 3
+      },
+      "missing_pct": {
+        "General Ledger": 0.98,
+        "Unnamed: 1": 1.47,
+        "Unnamed: 2": 1.47,
+        "Unnamed: 3": 1.47,
+        "Unnamed: 4": 0.98,
+        "Unnamed: 5": 50.0,
+        "Unnamed: 6": 50.0,
+        "Unnamed: 7": 1.47
+      },
+      "duplicate_rows": 0,
+      "sample_rows": [
+        {
+          "General Ledger": "100 transactions (200 posting lines) - Jan to Mar 2026",
+          "Unnamed: 1": NaN,
+          "Unnamed: 2": NaN,
+          "Unnamed: 3": NaN,
+          "Unnamed: 4": NaN,
+          "Unnamed: 5": NaN,
+          "Unnamed: 6": NaN,
+          "Unnamed: 7": NaN
+        },
+        {
+          "General Ledger": NaN,
+          "Unnamed: 1": NaN,
+          "Unnamed: 2": NaN,
+          "Unnamed: 3": NaN,
+          "Unnamed: 4": NaN,
+          "Unnamed: 5": NaN,
+          "Unnamed: 6": NaN,
+          "Unnamed: 7": NaN
+        },
+        {
+          "General Ledger": "Txn No",
+          "Unnamed: 1": "Date",
+          "Unnamed: 2": "Voucher No",
+          "Unnamed: 3": "Account Code",
+          "Unnamed: 4": "Account Name",
+          "Unnamed: 5": "Debit",
+          "Unnamed: 6": "Credit",
+          "Unnamed: 7": "Narration"
+        },
+        {
+          "General Ledger": "12",
+          "Unnamed: 1": "2026-01-01",
+          "Unnamed: 2": "JV-0012",
+          "Unnamed: 3": "5400",
+          "Unnamed: 4": "Depreciation Expense",
+          "Unnamed: 5": "38500",
+          "Unnamed: 6": NaN,
+          "Unnamed: 7": "Depreciation charged on office equipment - 2012"
+        },
+        {
+          "General Ledger": "12",
+          "Unnamed: 1": "2026-01-01",
+          "Unnamed: 2": "JV-0012",
+          "Unnamed: 3": "1510",
+          "Unnamed: 4": "Accumulated Depreciation - Office Equipment",
+          "Unnamed: 5": NaN,
+          "Unnamed: 6": "38500",
+          "Unnamed: 7": "Depreciation charged on office equipment - 2012"
+        }
+      ],
+      "detected_columns": {
+        "account_code": null,
+        "account_name": null,
+        "date": null,
+        "debit": null,
+        "credit": null,
+        "department": null,
+        "currency": null,
+        "reference": null
+      },
+      "sheet_type": "General Ledger"
+    },
+    "Trial Balance": {
+      "rows": 35,
+      "columns": 8,
+      "column_names": [
+        "Trial Balance",
+        "Unnamed: 1",
+        "Unnamed: 2",
+        "Unnamed: 3",
+        "Unnamed: 4",
+        "Unnamed: 5",
+        "Unnamed: 6",
+        "Unnamed: 7"
+      ],
+      "dtypes": {
+        "Trial Balance": "str",
+        "Unnamed: 1": "str",
+        "Unnamed: 2": "str",
+        "Unnamed: 3": "str",
+        "Unnamed: 4": "str",
+        "Unnamed: 5": "str",
+        "Unnamed: 6": "str",
+        "Unnamed: 7": "str"
+      },
+      "missing_values": {
+        "Trial Balance": 4,
+        "Unnamed: 1": 3,
+        "Unnamed: 2": 4,
+        "Unnamed: 3": 4,
+        "Unnamed: 4": 4,
+        "Unnamed: 5": 4,
+        "Unnamed: 6": 3,
+        "Unnamed: 7": 4
+      },
+      "missing_pct": {
+        "Trial Balance": 11.43,
+        "Unnamed: 1": 8.57,
+        "Unnamed: 2": 11.43,
+        "Unnamed: 3": 11.43,
+        "Unnamed: 4": 11.43,
+        "Unnamed: 5": 11.43,
+        "Unnamed: 6": 8.57,
+        "Unnamed: 7": 11.43
+      },
+      "duplicate_rows": 1,
+      "label": "Closing / Trial Balance",
+      "sample_rows": [
+        {
+          "Trial Balance": "As at 31-Mar-2026 (Opening Balances + Period Movement from General Ledger)",
+          "Unnamed: 1": NaN,
+          "Unnamed: 2": NaN,
+          "Unnamed: 3": NaN,
+          "Unnamed: 4": NaN,
+          "Unnamed: 5": NaN,
+          "Unnamed: 6": NaN,
+          "Unnamed: 7": NaN
+        },
+        {
+          "Trial Balance": NaN,
+          "Unnamed: 1": NaN,
+          "Unnamed: 2": NaN,
+          "Unnamed: 3": NaN,
+          "Unnamed: 4": NaN,
+          "Unnamed: 5": NaN,
+          "Unnamed: 6": NaN,
+          "Unnamed: 7": NaN
+        },
+        {
+          "Trial Balance": "Account Code",
+          "Unnamed: 1": "Account Name",
+          "Unnamed: 2": "Opening Debit",
+          "Unnamed: 3": "Opening Credit",
+          "Unnamed: 4": "Period Debit",
+          "Unnamed: 5": "Period Credit",
+          "Unnamed: 6": "Closing Debit",
+          "Unnamed: 7": "Closing Credit"
+        },
+        {
+          "Trial Balance": "1000",
+          "Unnamed: 1": "Cash in Hand",
+          "Unnamed: 2": "500000",
+          "Unnamed: 3": "0",
+          "Unnamed: 4": "231900",
+          "Unnamed: 5": "367900",
+          "Unnamed: 6": "364000",
+          "Unnamed: 7": "0"
+        },
+        {
+          "Trial Balance": "1010",
+          "Unnamed: 1": "Bank Account - Main",
+          "Unnamed: 2": "2500000",
+          "Unnamed: 3": "0",
+          "Unnamed: 4": "1070500",
+          "Unnamed: 5": "2974400",
+          "Unnamed: 6": "596100",
+          "Unnamed: 7": "0"
+        }
+      ],
+      "detected_columns": {
+        "account_code": null,
+        "account_name": null,
+        "debit": null,
+        "credit": null,
+        "balance": null,
+        "category": null
+      },
+      "sheet_type": "Closing / Trial Balance"
+    }
+  },
+  "cross_validation": {
+    "sheet_keys_used": {
+      "general_ledger": "General Ledger",
+      "opening_trial_bal": "Opening Balances-TB",
+      "closing_trial_bal": "Trial Balance"
+    },
+    "reconciliation_skip": "Missing columns prevented OB+GL=CB check."
+  },
+  "data_quality_flags": [
+    "[Chart of Accounts] Missing values: {'Chart of Accounts': 1, 'Unnamed: 1': 2, 'Unnamed: 2': 2, 'Unnamed: 3': 2}",
+    "[Opening Balances-TB] 1 duplicate row(s).",
+    "[Opening Balances-TB] Missing values: {'Opening Trial Balance': 4, 'Unnamed: 1': 3, 'Unnamed: 2': 25, 'Unnamed: 3': 25}",
+    "[General Ledger] Missing values: {'General Ledger': 2, 'Unnamed: 1': 3, 'Unnamed: 2': 3, 'Unnamed: 3': 3, 'Unnamed: 4': 2, 'Unnamed: 5': 102, 'Unnamed: 6': 102, 'Unnamed: 7': 3}",
+    "[Trial Balance] 1 duplicate row(s).",
+    "[Trial Balance] Missing values: {'Trial Balance': 4, 'Unnamed: 1': 3, 'Unnamed: 2': 4, 'Unnamed: 3': 4, 'Unnamed: 4': 4, 'Unnamed: 5': 4, 'Unnamed: 6': 3, 'Unnamed: 7': 4}"
+  ]
+}
