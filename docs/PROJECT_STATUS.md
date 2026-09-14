@@ -262,6 +262,33 @@ financial_reporting_ai/
 - **Acceptance testing**: `tests/test_acceptance.py` — 42 criteria across baseline integrity, UP1 detection/mapping, UP2 validation/COA, UP3 dataset manager, UP4 history/duplicates, UP5 insights/error handling, UP6 export/security, and dashboard rendering. Self-contained (builds its own malformed fixture and generates its own export). **42/42 pass.**
 - **Status**: COMPLETE / AWAITING USER REVIEW
 
+### BR: Bank Reconciliation — Month-End Close Item 1
+- **Files Created**: `src/bank_reconciliation.py`
+- **Files Modified**: `src/reconciliation.py` (rewritten to delegate), `src/data_loader.py` (4 bank canonical columns), `src/file_detector.py` (Bank Statement signature), `src/column_mapper.py`, `src/validation_engine.py`, `src/file_upload.py` (bank_statement slot), `src/month_end_close.py`, `dashboard/app.py` (Sub-Ledgers reconciliation view), `tests/test_acceptance.py` (+9 criteria)
+- **Trigger**: the Month-End Close checklist showed Bank Reconciliation as *Pending* with "Module (reconciliation.py) is built and ready". It was not ready — `reconcile_bank()` ended in a bare `pass`, so supplying a statement returned `None`.
+- **Two bugs found and fixed**:
+  1. **Wrong bank balance.** `analyze_reconciliation()` selected accounts with `account_name.contains("Bank")`, which also matched **2200 Loan Payable - Bank** (a liability) and **5800 Bank Charges** (an expense). The dashboard reported a bank balance of **(131,400)** against a true figure of **596,100** — an error of **727,500**. Selection is now driven by the COA classification (`grouping_label == "Cash & Cash Equivalents"`), narrowed by name only within cash accounts.
+  2. **`reconcile_bank()` was a stub** returning `None` whenever a statement was actually supplied. It now performs a real reconciliation and returns the reconciliation statement.
+- **Key Outputs**:
+  - `bank_reconciliation.py`: normalises both sides to one signed amount (positive = money in) before comparing, because a statement is written from the **bank's** perspective — its "Debit" is money *out* of the account, which is a **credit** in the cash book. Three statement layouts are handled: Withdrawal/Deposit columns, Debit/Credit columns, and a single signed Amount column; the detected layout is reported to the user.
+  - **Two-pass matching**, each entry consumed once: exact (same amount, same date), then timing (same amount, date within a tolerance, default 5 days). Timing differences are reported **separately** rather than folded into "matched", because cheques in clearing and deposits in transit are genuine reconciling items.
+  - Residuals are the substance of the reconciliation: **in books only** (unpresented cheques) and **on statement only** (bank charges, interest, direct debits needing journals).
+  - `statement_table()` produces the classic reconciliation statement: balance per cash book → less/add reconciling items → derived bank balance → actual bank balance → unexplained difference.
+  - `is_reconciled` requires the unmatched items to explain the gap **exactly**. A zero difference with items outstanding is a coincidence, not a reconciliation, and is not reported as one.
+  - **Bank Statement upload**: new canonical columns `bank_debit` / `bank_credit` / `bank_amount` / `bank_balance` (20 aliases), a detector signature, required fields, and a `bank_statement` session slot. Kept separate from `debit`/`credit` so the sign convention is never guessed.
+  - **Checklist now has three states**: *Pending* (no statement), *Completed* (reconciled), and **Exception** (reconciliation ran but an unexplained difference remains) — a reconciliation that does not reconcile is not a completed control.
+- **Validations Passed**:
+  - Alias regression: **106/106** column aliases resolve correctly (86 existing + 20 new bank aliases); zero collisions, verified before the change.
+  - Statement derived from the real ledger with planted differences (2 omitted, 3 date-shifted, 2 bank-only) and detected at **90.9% confidence** as a Bank Statement: **58 matched, 3 timing, 2 in books only, 2 on statement only**, unexplained difference **0.00**.
+  - Month-End Close item flips **Pending → Completed** when a statement is uploaded, with notes describing the real outcome.
+  - All 8 dashboard sections render both with and without a statement; `tests/test_financials.py` 6/6; acceptance suite extended to **51/51**.
+  - With no statement the engine reports honestly that it cannot reconcile and returns an empty result — it never manufactures the other side.
+- **Limitations**:
+  - Matching is on amount and date. Two genuinely distinct transactions of the same amount on the same date are matched arbitrarily (first available); reference/description are shown for review but do not drive matching. A reference-first pass would tighten this where statements carry reliable cheque numbers.
+  - The date tolerance is a fixed 5 days (`DEFAULT_DATE_TOLERANCE_DAYS`), not configurable from the UI.
+  - Multi-currency statements are out of scope, consistent with the rest of the platform.
+- **Status**: COMPLETE / AWAITING USER REVIEW
+
 ## HOUSEKEEPING / MAINTENANCE LOG
 
 ### H1-H3: Packaging & Column-Alias Fixes (pre-UP3)
@@ -283,6 +310,7 @@ financial_reporting_ai/
 ## REMAINING PHASES (NOT YET STARTED)
 - **None for core project** (Phases 1-10 complete).
 - **Upload Feature UP1–UP6 all COMPLETE.** 42/42 acceptance criteria pass (`python tests/test_acceptance.py`).
+- Bank Reconciliation (Month-End Close item 1) now functional — see the BR entry.
 - **Open item**: two generated report files are tracked in git and present in history — see the UP6 entry's outstanding privacy issue.
 - **No blockers.** The source dataset has been restored, `tests/test_financials.py` passes 6/6, and all 8 dashboard sections render.
 

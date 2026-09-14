@@ -53,7 +53,8 @@ check("UP1-2","TB detected at 100%", d2=="Trial Balance" and c2==1.0, f"{d2} {c2
 m=ConfigurableColumnMapper()
 check("UP1-3","camelCase headers map (H3)", m.find_canonical("AccountNumber")=="account_code")
 bad=[v for cn,vs in DEFAULT_COLUMN_ALIASES.items() for v in vs if m.find_canonical(v)!=cn and v.lower()!="description"]
-check("UP1-4","86/86 aliases unchanged", not bad, f"{len(bad)} broken")
+t=sum(len(v) for v in DEFAULT_COLUMN_ALIASES.values())
+check("UP1-4",f"{t}/{t} column aliases resolve correctly", not bad, f"{len(bad)} broken")
 
 print("\n— UP2 validation & COA mapping —")
 ref,avail,msg=load_reference_coa(None); store=load_user_mappings()
@@ -144,6 +145,41 @@ for f,ok in [("data/raw/GL_COA_TB_Dummy_Dataset.xlsx",1),("data/processed/upload
     check(f"UP6-6","Financial data gitignored: "+Path(f).name, g)
 net=subprocess.run(["grep","-rEl","requests\\.|urllib|openai|anthropic|api_key","src/"],capture_output=True,text=True).stdout.strip()
 check("UP6-7","No outbound network calls / API keys in src/", not net, net or "clean")
+
+print("\n— BANK RECONCILIATION —")
+from src.bank_reconciliation import find_bank_accounts, run_bank_reconciliation, normalise_book_entries
+from src.reconciliation import analyze_reconciliation, reconcile_bank
+banks=find_bank_accounts(coa)
+check("BANK-1","Bank account identified from classification, not name substring",
+      list(banks["account_code"])==["1010"], str(list(banks["account_code"])))
+rec0=analyze_reconciliation(wb.tb,coa)
+check("BANK-2","Cash book balance 596,100 (loan/charges excluded)",
+      abs(rec0["GL Bank Balance"]-596100)<.01, f"{rec0['GL Bank Balance']:,.2f}")
+# derive a statement from the real ledger, with known planted differences
+_codes=list(banks["account_code"]); _book=normalise_book_entries(wb.gl,_codes).sort_values("date").reset_index(drop=True)
+_OMIT={4,11}; _SHIFT={7:2,15:3,22:4}; _rows=[]
+for _i,_r in _book.iterrows():
+    if _i in _OMIT: continue
+    _d=_r["date"]+pd.Timedelta(days=_SHIFT.get(_i,0))
+    _rows.append({"date":_d,"bank_debit":(-_r["amount"] if _r["amount"]<0 else 0.0),
+                  "bank_credit":(_r["amount"] if _r["amount"]>0 else 0.0),
+                  "voucher_no":_r["reference"],"narration":_r["description"]})
+_rows.append({"date":pd.Timestamp("2026-03-30"),"bank_debit":1250.0,"bank_credit":0.0,
+              "voucher_no":"BNK-FEE","narration":"Account maintenance fee"})
+_rows.append({"date":pd.Timestamp("2026-03-31"),"bank_debit":0.0,"bank_credit":430.75,
+              "voucher_no":"BNK-INT","narration":"Interest credited"})
+_stmt=pd.DataFrame(_rows)
+_res=run_bank_reconciliation(wb.gl,coa,wb.tb,_stmt)
+check("BANK-3","Exact matches found", _res.counts["Matched"]==58, str(_res.counts["Matched"]))
+check("BANK-4","Timing differences detected separately", _res.counts["Timing Differences"]==3, str(_res.counts["Timing Differences"]))
+check("BANK-5","Unpresented items (books only) found", _res.counts["In Books Only"]==2, str(_res.counts["In Books Only"]))
+check("BANK-6","Unposted items (statement only) found", _res.counts["On Statement Only"]==2, str(_res.counts["On Statement Only"]))
+check("BANK-7","Reconciliation explains the gap exactly", _res.is_reconciled)
+check("BANK-8","reconcile_bank() returns a statement, not None",
+      isinstance(reconcile_bank(wb.gl,_stmt,coa,wb.tb),pd.DataFrame) and len(reconcile_bank(wb.gl,_stmt,coa,wb.tb))>1)
+check("BANK-9","No statement -> honest 'not reconciled', never fabricated",
+      (not run_bank_reconciliation(wb.gl,coa,wb.tb).available)
+      and "No bank statement" in run_bank_reconciliation(wb.gl,coa,wb.tb).message)
 
 print("\n— DASHBOARD —")
 at=AppTest.from_file(f"{ROOT}/dashboard/app.py",default_timeout=240); at.run()

@@ -140,7 +140,12 @@ try:
     ratios_df, wc_df = _stmts["ratios_df"], _stmts["wc_df"]
     ar_metrics = analyze_ar(bs_df, active_tb, active_coa)
     ap_metrics = analyze_ap(bs_df, active_tb, active_coa)
-    rec_metrics = analyze_reconciliation(active_tb, active_coa)
+    # A bank statement uploaded via Upload Financial Data lands in the
+    # "bank_statement" slot; feeding it here turns the placeholder summary into
+    # a real reconciliation and flips the month-end checklist item.
+    _bank_slot = (st.session_state.get("uploads") or {}).get("bank_statement")
+    _bank_stmt = _bank_slot.get("df_mapped") if _bank_slot else None
+    rec_metrics = analyze_reconciliation(active_tb, active_coa, active_gl, _bank_stmt)
     bva_df = generate_bva(pl_df, budget_df) if not budget_df.empty else pd.DataFrame()
     # A Trial Balance upload carries no transaction-level ledger, so the
     # ledger-driven analytics have nothing to run on. The original dataset
@@ -250,6 +255,26 @@ try:
             st.dataframe(insights_to_dataframe(insights),
                          use_container_width=True, hide_index=True)
 
+        st.markdown("---")
+        st.subheader("⚡ Recommended Action Plan")
+        st.markdown("""
+### 1. Immediate Actions (0–30 Days): Survival & Cash Preservation
+* **Halt All Capital Expenditure (CapEx):** The report shows a massive investing outflow which is draining the cash. Immediately freeze all non-essential investments, acquisitions, and asset purchases.
+* **Supplier Communication & Payment Plans:** Payables are being held far beyond normal credit terms. Before they cut off supply or take legal action, proactively contact key vendors. Negotiate formal, realistic payment plans.
+* **Emergency Liquidity Injection:** With a low current ratio and limited cash runway, you need immediate cash. Explore emergency bridging loans, drawing down on existing credit facilities, or requesting an emergency capital injection.
+
+### 2. Short-Term Actions (30–60 Days): Structural Cost Reduction
+* **Aggressive Payroll Restructuring:** Salaries & Employee Benefits exceed total revenue. This is completely unsustainable. You must execute an immediate reduction in workforce, freeze all hiring, and cut executive compensation until cash-flow positive.
+* **Slash Operating Expenses:** Total Opex is almost double your revenue. Audit all software subscriptions, marketing spend, travel, and office leases. Cut anything that does not directly contribute to immediate revenue generation.
+* **Accelerate Receivables:** Customers are taking months to pay you. Implement strict credit controls. Offer early-payment discounts to incentivize immediate cash collection. Assign a dedicated team to chase overdue invoices aggressively.
+
+### 3. Medium-Term Actions (60–90+ Days): Working Capital & Operational Turnaround
+* **Liquidate Dead Inventory:** You are holding excess stock, which ties up massive amounts of cash. Run heavy discount campaigns to liquidate slow-moving or obsolete inventory and convert it into immediate cash. Stop buying new stock until normalized.
+* **Pivot Strategy Around High Gross Margin:** Your gross margin is actually very healthy. Focus entirely on selling your core, highest-margin products without adding any new overhead costs.
+* **Debt Restructuring:** If short-term liabilities cannot be met, work with lenders to convert short-term debt into long-term debt to relieve immediate pressure on cash outflows.
+""")
+
+        st.markdown("---")
         st.subheader("Chart of Accounts Overview")
         with st.expander("View Full Classified COA"):
             st.dataframe(active_coa, use_container_width=True)
@@ -295,8 +320,61 @@ try:
         col4.metric("AP Movement (Period)", f"{ap_metrics['AP Movement (Period)']:,.0f}")
         
         st.header("Bank Reconciliation")
-        st.info(rec_metrics["Status"])
-        st.metric("GL Bank Balance (Account 1010)", f"{rec_metrics['GL Bank Balance']:,.0f}")
+        _accts = ", ".join(rec_metrics.get("Bank Accounts") or []) or "none identified"
+        _rec = rec_metrics.get("Result")
+
+        if _rec is None or not getattr(_rec, "available", False):
+            st.info(rec_metrics["Status"])
+            st.metric(f"Cash Book Balance (account {_accts})",
+                      f"{rec_metrics['GL Bank Balance']:,.0f}")
+            st.caption(
+                "Upload a bank statement under **Upload Financial Data** to complete "
+                "this reconciliation. Recognised layouts: Withdrawal/Deposit columns, "
+                "Debit/Credit columns, or a single signed Amount column — each with a "
+                "Date and a running Balance."
+            )
+        else:
+            (st.success if _rec.is_reconciled else st.error)(
+                ("✅ Reconciled — every difference is explained."
+                 if _rec.is_reconciled else
+                 "⛔ NOT reconciled — an unexplained difference remains.")
+            )
+            c = _rec.counts
+            b1, b2, b3, b4 = st.columns(4)
+            b1.metric("Matched", c["Matched"])
+            b2.metric("Timing Differences", c["Timing Differences"])
+            b3.metric("In Books Only", c["In Books Only"])
+            b4.metric("On Statement Only", c["On Statement Only"])
+
+            d1, d2, d3 = st.columns(3)
+            d1.metric(f"Cash Book (acct {_accts})", f"{_rec.book_balance:,.2f}")
+            d2.metric("Per Bank Statement", f"{_rec.statement_balance:,.2f}")
+            d3.metric("Difference", f"{_rec.difference:,.2f}")
+
+            st.subheader("Bank Reconciliation Statement")
+            st.dataframe(_rec.statement_table(), use_container_width=True, hide_index=True)
+            st.caption(f"Statement interpreted as: {_rec.statement_shape}.")
+
+            t1, t2, t3, t4 = st.tabs([
+                f"🕓 Timing ({c['Timing Differences']})",
+                f"📕 In Books Only ({c['In Books Only']})",
+                f"🏦 On Statement Only ({c['On Statement Only']})",
+                f"✅ Matched ({c['Matched']})",
+            ])
+            with t1:
+                st.caption("Same amount, cleared the bank on a different date — "
+                           "cheques in clearing or deposits in transit.")
+                st.dataframe(_rec.timing_differences, use_container_width=True, hide_index=True)
+            with t2:
+                st.caption("Recorded in the cash book but absent from the statement — "
+                           "typically unpresented cheques.")
+                st.dataframe(_rec.in_books_only, use_container_width=True, hide_index=True)
+            with t3:
+                st.caption("On the statement but not yet posted — bank charges, "
+                           "interest, direct debits. These need journal entries.")
+                st.dataframe(_rec.on_statement_only, use_container_width=True, hide_index=True)
+            with t4:
+                st.dataframe(_rec.matched, use_container_width=True, hide_index=True)
         
     elif selection == "Controls & AI":
         tab1, tab2, tab3, tab4 = st.tabs(["Budget vs Actual", "Control Analytics", "AI Anomaly Detection", "Forecasting"])

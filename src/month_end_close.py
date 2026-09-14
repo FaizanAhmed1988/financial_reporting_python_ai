@@ -32,6 +32,12 @@ def build_checklist(
     balanced = bs_metrics.get("Is Balanced", False)
     cf_reconciled = cf_metrics.get("Reconciled", False)
     bank_recon_pending = "No bank statement file provided" in str(rec_metrics.get("Status", ""))
+    # A reconciliation that runs but leaves an unexplained gap is an EXCEPTION,
+    # not a completed task — the whole point of the control is that the
+    # difference is fully explained.
+    _rec = rec_metrics.get("Result")
+    bank_recon_exception = bool(_rec is not None and getattr(_rec, "available", False)
+                                and not getattr(_rec, "is_reconciled", False))
 
     # Check whether depreciation account appears in GL
     depr_accounts = coa_classified[
@@ -48,8 +54,10 @@ def build_checklist(
         {
             "No": 1,
             "Checklist Item": "Bank Reconciliation",
-            "Status": PENDING if bank_recon_pending else COMPLETED,
-            "Notes": "No bank statement file provided. Module (reconciliation.py) is built and ready. Upload bank statement CSV/XLSX to complete." if bank_recon_pending else "Reconciled via GL bank account balance.",
+            "Status": (PENDING if bank_recon_pending
+                       else EXCEPTION if bank_recon_exception
+                       else COMPLETED),
+            "Notes": str(rec_metrics.get("Status", "")),
         },
         {
             "No": 2,
