@@ -72,6 +72,7 @@ pip install -r requirements.txt
 ### Launch the Dashboard
 Run the canonical Streamlit application:
 ```bash
+pip install -r requirements.txt
 python -m streamlit run dashboard/app.py
 ```
 
