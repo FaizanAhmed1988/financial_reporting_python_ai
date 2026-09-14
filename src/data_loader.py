@@ -20,6 +20,7 @@ CANONICAL INTERNAL FIELD NAMES
   opening_debit  | opening_credit
   period_debit   | period_credit
   closing_debit  | closing_credit
+  bank_debit     | bank_credit   | bank_amount   | bank_balance
 
 SUPPORTED SHEET ROLES
 ---------------------
@@ -31,6 +32,7 @@ SUPPORTED SHEET ROLES
 
 from __future__ import annotations
 
+import re
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,6 +81,17 @@ DEFAULT_COLUMN_ALIASES: Dict[str, List[str]] = {
     "period_credit":   ["Period Credit", "Movement Credit", "Activity Credit",
                         "Mvt Cr", "Period Cr"],
 
+    # --- Bank statement specific ---
+    # A statement is written from the BANK's perspective, so its own
+    # debit/credit are the mirror of the cash book's. These are kept separate
+    # from `debit`/`credit` so the sign convention is never guessed.
+    "bank_debit":      ["Withdrawal", "Withdrawals", "Money Out", "Paid Out",
+                        "Payments Out", "Amount Out"],
+    "bank_credit":     ["Deposit", "Deposits", "Money In", "Paid In", "Amount In"],
+    "bank_amount":     ["Amount", "Transaction Amount", "Txn Amount", "Value"],
+    "bank_balance":    ["Balance", "Running Balance", "Closing Balance",
+                        "Ledger Balance", "Available Balance"],
+
     # --- TB-specific (Closing) ---
     "closing_debit":   ["Closing Debit", "Cl Debit", "CB Debit", "Closing Dr",
                         "Debit Balance"],
@@ -120,14 +133,44 @@ class ConfigurableColumnMapper:
                 self.aliases[canon] = variants + self.aliases.get(canon, [])
 
         # Build reverse map: normalised_source -> canonical
+        # `_reverse`  : exact, case-insensitive match on the alias as written.
+        # `_squashed` : same aliases with every non-alphanumeric character
+        #               removed, so "Account Number", "AccountNumber",
+        #               "account_number" and "ACCOUNT-NUMBER" all collapse to
+        #               "accountnumber". Built in the SAME iteration order as
+        #               _reverse so an alias claimed by two canonical fields
+        #               (e.g. "Description") resolves identically in both.
         self._reverse: Dict[str, str] = {}
+        self._squashed: Dict[str, str] = {}
         for canon, variants in self.aliases.items():
             for v in variants:
                 self._reverse[v.lower().strip()] = canon
+                self._squashed[self._squash(v)] = canon
+
+    @staticmethod
+    def _squash(name: str) -> str:
+        """
+        Collapse a column name to letters and digits only, lowercased.
+
+        This is what lets separator-free headers match their spaced aliases:
+        ERP exports vary between "Account Number", "AccountNumber",
+        "account_number" and "ACCOUNT-NUMBER" for the same field.
+        """
+        return re.sub(r"[^a-z0-9]", "", str(name).lower())
 
     def find_canonical(self, source_col: str) -> Optional[str]:
-        """Return the canonical field name for a source column, or None."""
-        return self._reverse.get(source_col.lower().strip())
+        """
+        Return the canonical field name for a source column, or None.
+
+        Exact (case-insensitive) matching is tried first so existing behaviour
+        is unchanged; the separator-insensitive index is only consulted for
+        columns that would otherwise go unmatched. The fallback can therefore
+        add matches but never alter or remove an existing one.
+        """
+        exact = self._reverse.get(str(source_col).lower().strip())
+        if exact is not None:
+            return exact
+        return self._squashed.get(self._squash(source_col))
 
     def build_rename_map(self, df_columns: List[str]) -> Dict[str, str]:
         """Return {source_col: canonical_col} for all matched columns."""

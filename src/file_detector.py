@@ -34,6 +34,12 @@ FILE_TYPE_SIGNATURES: Dict[str, Dict] = {
         "supporting":  ["account_name", "period_debit", "period_credit"],
         "description": "Opening period balances only.",
     },
+    "Bank Statement": {
+        "required":    ["date", "bank_balance"],
+        "supporting":  ["bank_debit", "bank_credit", "bank_amount",
+                        "narration", "voucher_no"],
+        "description": "Bank-issued transaction listing with a running balance.",
+    },
     "Other / Unknown": {
         "required":    [],
         "supporting":  [],

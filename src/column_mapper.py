@@ -19,6 +19,7 @@ REQUIRED_FIELDS_BY_TYPE: Dict[str, List[str]] = {
     "Trial Balance":         ["account_code", "closing_debit", "closing_credit"],
     "Chart of Accounts":     ["account_code", "account_name", "account_type"],
     "Opening Trial Balance": ["account_code", "opening_debit", "opening_credit"],
+    "Bank Statement":        ["date", "bank_balance"],
     "Other / Unknown":       [],
 }
 

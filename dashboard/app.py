@@ -25,6 +25,22 @@ from src.scenario_analysis import run_scenarios
 from src.reporting import generate_excel_report
 from src.month_end_close import build_checklist
 from src.file_upload import render_upload_section
+from src.insights_engine import (
+    generate_insights,
+    insights_to_dataframe,
+    severity_counts,
+    CRITICAL as SEV_CRITICAL,
+    WARNING as SEV_WARNING,
+    WATCH as SEV_WATCH,
+    POSITIVE as SEV_POSITIVE,
+)
+from src.dataset_manager import (
+    ORIGINAL_DATASET_NAME,
+    build_original_dataset,
+    compute_statements,
+    dataset_names,
+    register as register_dataset,
+)
 from pathlib import Path as _Path
 
 st.set_page_config(page_title="Financial Reporting AI", layout="wide")
@@ -43,26 +59,112 @@ def load_data():
     
     return wb, coa_classified, budget_df
 
+def _bs_line(bs_df, label):
+    """Amount for a balance-sheet line, or None when the dataset lacks it."""
+    try:
+        hit = bs_df[bs_df["Line Item"].astype(str).str.strip() == label]
+        return None if hit.empty else float(hit["Amount"].iloc[0])
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
+def _wc_lookup(wc_df, metric):
+    """Numeric value from the working-capital table, or None."""
+    try:
+        hit = wc_df[wc_df["Metric"].astype(str).str.strip() == metric]
+        if hit.empty:
+            return None
+        raw = str(hit["Amount/Value"].iloc[0])
+        return float(raw.replace(",", "").replace("x", "").replace(" days", "").strip())
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
+def _fmt_num(value, fmt="{:,.0f}"):
+    return "n/a" if value is None else fmt.format(value)
+
+
 try:
     wb, coa_classified, budget_df = load_data()
-    
-    # Engine Calculations
-    pl_df, pl_metrics = generate_profit_loss(coa_classified, wb.tb)
+
+    # Expose the live classified COA to the Upload feature (UP2) as its reference
+    # Chart of Accounts. Read-only hand-off: nothing in the engine reads this back.
+    st.session_state["engine_coa_classified"] = coa_classified
+
+    # ── UP3: Dataset registry + selector ─────────────────────────────────
+    # The source workbook is registered once as the immutable baseline. Uploads
+    # can only ADD entries to this registry; nothing rewrites the original.
+    if "datasets" not in st.session_state:
+        st.session_state["datasets"] = {}
+    registry = st.session_state["datasets"]
+    if ORIGINAL_DATASET_NAME not in registry:
+        register_dataset(registry, build_original_dataset(coa_classified, wb))
+
+    st.sidebar.title("Dataset")
+    active_name = st.sidebar.selectbox(
+        "Dataset",
+        options=dataset_names(registry),
+        index=0,
+        key="active_dataset",
+        help="Switch between the original Q1 2026 data and any uploaded dataset. "
+             "Every section below recalculates for the selected dataset.",
+        label_visibility="collapsed",
+    )
+    active = registry[active_name]
+    active_coa, active_tb, active_gl = active.coa_classified, active.tb, active.gl
+
+    # Engine Calculations — same engine functions, driven by the active dataset.
+    # compute_statements() is the single place the engine sequence is expressed.
+    # UP5: an uploaded dataset can be malformed in ways the validator did not
+    # anticipate. Without this guard one bad dataset replaces the entire
+    # dashboard with "Application Error" — including the selector needed to get
+    # back. On failure we say what broke and fall back to the original.
+    try:
+        _stmts = compute_statements(active, days_in_period=90)
+    except Exception as exc:
+        st.error(
+            f"⛔ Dataset **{active.name}** could not be processed by the financial "
+            f"engine: {exc}"
+        )
+        st.info(
+            "Falling back to the original dataset so the dashboard stays usable. "
+            "Re-upload the file and check the Validation Results before processing."
+        )
+        active = registry[ORIGINAL_DATASET_NAME]
+        active_coa, active_tb, active_gl = active.coa_classified, active.tb, active.gl
+        _stmts = compute_statements(active, days_in_period=90)
+    pl_df, pl_metrics = _stmts["pl_df"], _stmts["pl_metrics"]
     net_profit = pl_metrics["Net Profit"]
-    bs_df, bs_metrics = generate_balance_sheet(coa_classified, wb.tb, net_profit)
-    cf_df, cf_metrics = generate_cash_flow(coa_classified, wb.tb, net_profit)
-    ratios_df = calculate_ratios(pl_metrics, bs_metrics, bs_df, days_in_period=90)
-    wc_df = analyze_working_capital(pl_metrics, bs_df, days_in_period=90)
-    ar_metrics = analyze_ar(bs_df, wb.tb, coa_classified)
-    ap_metrics = analyze_ap(bs_df, wb.tb, coa_classified)
-    rec_metrics = analyze_reconciliation(wb.tb, coa_classified)
+    bs_df, bs_metrics = _stmts["bs_df"], _stmts["bs_metrics"]
+    cf_df, cf_metrics = _stmts["cf_df"], _stmts["cf_metrics"]
+    ratios_df, wc_df = _stmts["ratios_df"], _stmts["wc_df"]
+    ar_metrics = analyze_ar(bs_df, active_tb, active_coa)
+    ap_metrics = analyze_ap(bs_df, active_tb, active_coa)
+    rec_metrics = analyze_reconciliation(active_tb, active_coa)
     bva_df = generate_bva(pl_df, budget_df) if not budget_df.empty else pd.DataFrame()
-    controls_findings = run_control_tests(wb.gl)
-    ml_anomalies = run_ml_anomaly_detection(wb.gl)
-    forecast_results = generate_forecast(wb.tb, coa_classified, wb.gl)
-    mec_df = build_checklist(bs_metrics, cf_metrics, rec_metrics, coa_classified)
-    
+    # A Trial Balance upload carries no transaction-level ledger, so the
+    # ledger-driven analytics have nothing to run on. The original dataset
+    # always has a GL, so this branch never changes its behaviour.
+    if active.has_gl:
+        controls_findings = run_control_tests(active_gl)
+        ml_anomalies = run_ml_anomaly_detection(active_gl)
+        forecast_results = generate_forecast(active_tb, active_coa, active_gl)
+    else:
+        controls_findings, ml_anomalies, forecast_results = None, None, None
+    mec_df = build_checklist(bs_metrics, cf_metrics, rec_metrics, active_coa)
+
+    if not active.is_original:
+        st.warning(
+            f"📂 Viewing uploaded dataset **{active.name}** — not the original "
+            f"Q1 2026 data. Switch back with the Dataset selector in the sidebar."
+        )
+        if active.limitations:
+            with st.expander(f"⚠️ {len(active.limitations)} limitation(s) apply to this dataset", expanded=True):
+                for note in active.limitations:
+                    st.markdown(f"- {note}")
+
     # Navigation Sidebar
+    st.sidebar.markdown("---")
     st.sidebar.title("Navigation")
     pages = ["Executive Summary", "Financial Statements", "Ratios & Working Capital", 
              "Sub-Ledgers", "Controls & AI", "Scenario Analysis", "Month-End Close",
@@ -71,16 +173,22 @@ try:
     
     st.sidebar.markdown("---")
     st.sidebar.subheader("📊 Export")
-    if st.sidebar.button("Export to Excel", key="export_btn"):
+    if not active.has_gl:
+        st.sidebar.caption(
+            "Excel export needs transaction-level ledger data; this dataset has none."
+        )
+    if st.sidebar.button("Export to Excel", key="export_btn", disabled=not active.has_gl):
         with st.spinner("Generating Excel workbook..."):
             sc_df_export = run_scenarios(pl_metrics, bs_metrics, bs_df)
             out_path = project_root / "reports" / "excel" / "financial_report_Q1_2026.xlsx"
             excel_bytes = generate_excel_report(
-                coa_classified, wb.gl, wb.tb, pl_df, pl_metrics,
+                active_coa, active_gl, active_tb, pl_df, pl_metrics,
                 bs_df, bs_metrics, cf_df, cf_metrics, ratios_df, wc_df,
                 ar_metrics, ap_metrics, bva_df, controls_findings,
                 ml_anomalies, forecast_results, sc_df_export,
-                output_path=out_path
+                output_path=out_path,
+                dataset_name=active.name,
+                limitations=active.limitations,
             )
         st.sidebar.success(f"Saved to reports/excel/")
         st.sidebar.download_button(
@@ -92,25 +200,59 @@ try:
         )
 
     if selection == "Executive Summary":
-        st.header("Executive Summary (Q1 2026)")
+        st.header(f"Executive Summary — {active.name}")
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total Revenue", f"{pl_metrics.get('Total Revenue', 0):,.0f}")
         col2.metric("Gross Profit", f"{pl_metrics.get('Gross Profit', 0):,.0f}")
         col3.metric("EBITDA", f"{pl_metrics.get('EBITDA', 0):,.0f}")
         col4.metric("Net Profit / (Loss)", f"{net_profit:,.0f}")
-        
+
         col5, col6, col7, col8 = st.columns(4)
-        col5.metric("Cash Balance", f"{bs_df[bs_df['Line Item'].str.strip() == 'Cash & Cash Equivalents']['Amount'].iloc[0]:,.0f}")
-        cr_val = float(wc_df[wc_df['Metric'] == 'Current Ratio']['Amount/Value'].iloc[0].replace('x', ''))
-        col6.metric("Current Ratio", f"{cr_val:.2f}x")
-        dso_val = float(wc_df[wc_df['Metric'] == 'AR Days (DSO)']['Amount/Value'].iloc[0].replace(' days', ''))
-        col7.metric("DSO (Days)", f"{dso_val:.0f}")
-        dpo_val = float(wc_df[wc_df['Metric'] == 'AP Days (DPO)']['Amount/Value'].iloc[0].replace(' days', ''))
-        col8.metric("DPO (Days)", f"{dpo_val:.0f}")
+        # UP5: an uploaded dataset need not contain a cash account or the rows
+        # these metrics read. Unguarded .iloc[0] lookups crashed the whole
+        # dashboard in that case; these degrade to "n/a" instead.
+        col5.metric("Cash Balance", _fmt_num(_bs_line(bs_df, "Cash & Cash Equivalents")))
+        col6.metric("Current Ratio", _fmt_num(_wc_lookup(wc_df, "Current Ratio"), "{:.2f}x"))
+        col7.metric("DSO (Days)", _fmt_num(_wc_lookup(wc_df, "AR Days (DSO)"), "{:.0f}"))
+        col8.metric("DPO (Days)", _fmt_num(_wc_lookup(wc_df, "AP Days (DPO)"), "{:.0f}"))
+
+        # ── UP5: rule-based insights ─────────────────────────────────────
+        st.markdown("---")
+        st.subheader("🧠 Automated Interpretation")
+        st.caption(
+            "Generated by deterministic rules from the figures above — every finding "
+            "cites the numbers it is derived from. No external service is called and "
+            "no data leaves this machine."
+        )
+        insights = generate_insights(
+            _stmts, limitations=active.limitations, dataset_name=active.name
+        )
+        counts = severity_counts(insights)
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("🔴 Critical", counts.get(SEV_CRITICAL, 0))
+        s2.metric("🟠 Warning", counts.get(SEV_WARNING, 0))
+        s3.metric("🟡 Watch", counts.get(SEV_WATCH, 0))
+        s4.metric("🟢 Positive", counts.get(SEV_POSITIVE, 0))
+
+        if not insights:
+            st.info("No findings — every rule that could be evaluated passed.")
+        for ins in insights:
+            with st.expander(f"{ins.icon} **{ins.category}** — {ins.headline}",
+                             expanded=(ins.severity == SEV_CRITICAL)):
+                st.markdown(ins.explanation)
+                if ins.evidence:
+                    st.caption("Based on — " + " · ".join(
+                        f"**{k}**: {v}" for k, v in ins.evidence.items()))
+                if ins.recommendation:
+                    st.markdown(f"➡️ *{ins.recommendation}*")
+
+        with st.expander("📋 All findings as a table"):
+            st.dataframe(insights_to_dataframe(insights),
+                         use_container_width=True, hide_index=True)
 
         st.subheader("Chart of Accounts Overview")
         with st.expander("View Full Classified COA"):
-            st.dataframe(coa_classified, use_container_width=True)
+            st.dataframe(active_coa, use_container_width=True)
 
     elif selection == "Financial Statements":
         tab1, tab2, tab3 = st.tabs(["Profit & Loss", "Balance Sheet", "Cash Flow"])
@@ -162,18 +304,33 @@ try:
             st.warning("⚠️ **SYNTHETIC / DEMO DATA:** The budget figures below are synthetically generated for demonstration purposes. They are not part of the real company dataset.")
             if not bva_df.empty:
                 st.dataframe(bva_df, use_container_width=True, hide_index=True)
+        _no_ledger = ("This dataset was uploaded as a Trial Balance and carries no "
+                      "transaction-level General Ledger, so this analysis has nothing "
+                      "to run on. Select a dataset with ledger data.")
         with tab2:
-            st.markdown("Automated internal control tests run across 200 General Ledger transaction lines.")
-            summary_data = [{"Control Test": k, "Findings": v["count"], "Status": v["label"]} for k,v in controls_findings.items()]
-            st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
+            if controls_findings is None:
+                st.info("ℹ️ " + _no_ledger)
+            else:
+                st.markdown(
+                    f"Automated internal control tests run across {len(active_gl):,} "
+                    "General Ledger transaction lines."
+                )
+                summary_data = [{"Control Test": k, "Findings": v["count"], "Status": v["label"]} for k,v in controls_findings.items()]
+                st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
         with tab3:
-            st.markdown("**Model Details:** " + ml_anomalies["model_explanation"])
-            st.metric("Transactions Flagged by ML", ml_anomalies["count"])
-            if ml_anomalies["count"] > 0:
-                st.dataframe(ml_anomalies["findings"], use_container_width=True, hide_index=True)
+            if ml_anomalies is None:
+                st.info("ℹ️ " + _no_ledger)
+            else:
+                st.markdown("**Model Details:** " + ml_anomalies["model_explanation"])
+                st.metric("Transactions Flagged by ML", ml_anomalies["count"])
+                if ml_anomalies["count"] > 0:
+                    st.dataframe(ml_anomalies["findings"], use_container_width=True, hide_index=True)
         with tab4:
-            st.warning("⚠️ **LIMITATION:** " + forecast_results["limitation_warning"])
-            st.dataframe(forecast_results["forecast_df"], use_container_width=True, hide_index=True)
+            if forecast_results is None:
+                st.info("ℹ️ " + _no_ledger)
+            else:
+                st.warning("⚠️ **LIMITATION:** " + forecast_results["limitation_warning"])
+                st.dataframe(forecast_results["forecast_df"], use_container_width=True, hide_index=True)
             
     elif selection == "Scenario Analysis":
         st.header("FP&A Scenario Modeling")

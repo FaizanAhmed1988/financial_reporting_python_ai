@@ -17,6 +17,8 @@ from openpyxl.styles import (
 from openpyxl.styles.numbers import FORMAT_NUMBER_COMMA_SEPARATED1
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.dataframe import dataframe_to_rows
+
+from src.security import sanitize_cell
 from openpyxl.formatting.rule import ColorScaleRule, CellIsRule
 from openpyxl.comments import Comment
 
@@ -123,7 +125,7 @@ def _df_to_sheet(ws, df: pd.DataFrame, start_row: int = 1,
         is_total = any(kw.lower() in str(row[0]).lower() for kw in total_keywords)
         
         for c_idx, value in enumerate(row, 1):
-            cell = ws.cell(row=r_idx, column=c_idx, value=value)
+            cell = ws.cell(row=r_idx, column=c_idx, value=sanitize_cell(value))
             col_name = headers[c_idx - 1]
             
             # Number formatting
@@ -173,10 +175,18 @@ def generate_excel_report(
     forecast_results: Dict[str, Any],
     scenario_df: pd.DataFrame,
     output_path: Path = None,
+    dataset_name: str = "Original Dataset (Q1 2026)",
+    limitations: list = None,
 ) -> bytes:
     """
     Generate a 15-sheet professional Excel workbook.
     Returns bytes (for Streamlit download) and optionally saves to output_path.
+
+    UP6: `dataset_name` and `limitations` describe the dataset actually being
+    exported. Sheet 15 is generated from the live figures via
+    insights_engine.generate_insights() — it was previously a hardcoded
+    narrative describing the original Q1 2026 data, which meant exporting any
+    other dataset produced a report whose summary contradicted its own sheets.
     """
     wb = Workbook()
     wb.remove(wb.active)  # Remove default blank sheet
@@ -352,61 +362,116 @@ def generate_excel_report(
     ws.freeze_panes = "A5"
 
     # ── Sheet 15: Management Summary ────────────────────────────
+    # UP6: generated from the live figures by the UP5 rule engine. Previously
+    # this sheet was a hardcoded narrative about the original Q1 2026 dataset —
+    # it stated "Salaries ... represent 170% of revenue" when the true figure is
+    # 117%, and exporting any other dataset produced a summary that contradicted
+    # the sheets beside it.
+    from src.insights_engine import (
+        generate_insights, severity_counts, CRITICAL, WARNING, WATCH, POSITIVE, INFO,
+    )
+
     ws = wb.create_sheet("15. Management Summary")
-    _write_title(ws, "Management Summary — Q1 2026", "Prepared by: Financial Reporting AI Platform")
-    
+    _write_title(ws, f"Management Summary — {dataset_name}",
+                 "Prepared by: Financial Reporting AI Platform")
+
+    statements = {
+        "pl_df": pl_df, "pl_metrics": pl_metrics,
+        "bs_df": bs_df, "bs_metrics": bs_metrics,
+        "cf_df": cf_df, "cf_metrics": cf_metrics,
+        "ratios_df": ratios_df, "wc_df": wc_df,
+    }
+    insights = generate_insights(statements, limitations=limitations or [],
+                                 dataset_name=dataset_name)
+    counts = severity_counts(insights)
+
     net_p = pl_metrics.get("Net Profit", 0)
     rev = pl_metrics.get("Total Revenue", 0)
     gp = pl_metrics.get("Gross Profit", 0)
     gp_margin = (gp / rev * 100) if rev else 0
-    
-    total_ctrl_findings = sum(v["count"] for v in controls_findings.values())
-    
+    total_ctrl_findings = (
+        sum(v["count"] for v in controls_findings.values()) if controls_findings else 0
+    )
+
     lines = [
-        ("Q1 2026 FINANCIAL PERFORMANCE", None),
+        ("FINANCIAL PERFORMANCE", None),
         ("", None),
-        (f"Revenue: {rev:,.0f}", "Total income for the quarter, driven primarily by core product sales."),
-        (f"Gross Profit: {gp:,.0f} ({gp_margin:.1f}% margin)", "Strong gross margin reflecting healthy core business economics."),
-        (f"Net Profit / (Loss): {net_p:,.0f}", "The company posted a significant net loss, driven almost entirely by salary and payroll-related costs."),
+        (f"Revenue: {rev:,.0f}", "Total income for the period."),
+        (f"Gross Profit: {gp:,.0f} ({gp_margin:.1f}% margin)",
+         "Profitability of the core business before overheads."),
+        (f"Net Profit / (Loss): {net_p:,.0f}",
+         "Bottom-line result after all costs, finance charges and tax."),
         ("", None),
-        ("LIQUIDITY CONCERN — CRITICAL", None),
-        ("Current Ratio: 0.62x (Threshold: ≥1.0)", "The company has only 62 cents of current assets for every dollar of short-term liabilities. This is a significant liquidity risk requiring urgent management attention."),
-        ("Net Working Capital: (2,225,400)", "The negative working capital position indicates the company is currently reliant on its creditors to fund operations."),
-        ("DPO: 1,826 days", "The extraordinarily high Days Payable Outstanding indicates a large backlog of unpaid trade creditors ($5.7M). This may represent deferred payment arrangements or a payables management concern."),
-        ("", None),
-        ("INTERNAL CONTROL FINDINGS", None),
-        (f"Total Flags Raised: {total_ctrl_findings}", "No items are confirmed errors or fraud. All findings require management review."),
-        ("58 Weekend Transactions", "Potential anomaly — could reflect automated postings, retail operations, or a dataset artifact."),
-        ("16 Round-Number Transactions", "Transactions ≥$10,000 ending in exactly 000 — may indicate estimates or manual journal entries."),
-        ("4 AI-Flagged Anomalies", "Isolation Forest ML model identified 4 transactions with statistically isolated amounts relative to their account history."),
-        ("", None),
-        ("TOP RECOMMENDATIONS", None),
-        ("1. Investigate the Trade Payables balance ($5,734,100) — confirm age and creditor terms to assess liquidity risk.", None),
-        ("2. Review the salary cost structure — Salaries alone ($1,048,200) represent 170% of revenue, which is unsustainable.", None),
-        ("3. Upload invoice-level AR/AP data to enable customer ageing and vendor ageing reports (architecture is already in place).", None),
-        ("", None),
-        ("DATA LIMITATIONS", None),
-        ("Single Period Only: Q1 2026 only. No trend comparison possible.", None),
-        ("No invoice-level AR/AP data. Customer and vendor ageing cannot be produced.", None),
-        ("No bank statement. Bank reconciliation module is ready, awaiting data upload.", None),
+        (f"AUTOMATED FINDINGS — {counts.get(CRITICAL, 0)} critical, "
+         f"{counts.get(WARNING, 0)} warning, {counts.get(WATCH, 0)} watch", None),
     ]
-    
+
+    if not insights:
+        lines.append(("No findings — every rule that could be evaluated passed.", None))
+    for ins in insights:
+        if ins.severity in (CRITICAL, WARNING, WATCH, POSITIVE):
+            basis = "; ".join(f"{k}: {v}" for k, v in ins.evidence.items())
+            lines.append((f"[{ins.severity}] {ins.headline}",
+                          ins.explanation + (f"  (Basis — {basis})" if basis else "")))
+
+    recs = [i.recommendation for i in insights if i.recommendation]
+    if recs:
+        lines += [("", None), ("RECOMMENDATIONS", None)]
+        for n, rec in enumerate(recs[:6], start=1):
+            lines.append((f"{n}. {rec}", None))
+
+    if controls_findings:
+        lines += [
+            ("", None),
+            ("INTERNAL CONTROL FINDINGS", None),
+            (f"Total Flags Raised: {total_ctrl_findings}",
+             "No items are confirmed errors or fraud. All findings require management review."),
+        ]
+        for test_name, payload in controls_findings.items():
+            lines.append((f"{payload['count']} — {test_name}", payload.get("label", "")))
+        if ml_anomalies:
+            lines.append((f"{ml_anomalies.get('count', 0)} AI-Flagged Anomalies",
+                          "Isolation Forest flagged these as statistically isolated. "
+                          "Potential anomalies only — not confirmed errors."))
+
+    lines += [("", None), ("DATA LIMITATIONS", None)]
+    data_notes = [i.explanation for i in insights if i.category == "Data Quality"]
+    for note in (limitations or []):
+        lines.append((note, None))
+    for note in data_notes:
+        if note not in (limitations or []):
+            lines.append((note, None))
+    if not (limitations or data_notes):
+        lines.append(("No dataset-level limitations were recorded for this export.", None))
+
+    HEADINGS = {
+        "FINANCIAL PERFORMANCE", "INTERNAL CONTROL FINDINGS",
+        "RECOMMENDATIONS", "DATA LIMITATIONS",
+    }
     row = 4
     for heading, detail in lines:
-        if heading in ("Q1 2026 FINANCIAL PERFORMANCE", "LIQUIDITY CONCERN — CRITICAL", 
-                       "INTERNAL CONTROL FINDINGS", "TOP RECOMMENDATIONS", "DATA LIMITATIONS"):
-            ws.cell(row=row, column=1, value=heading).font = Font(name="Calibri", bold=True, size=12, color="1F4E79")
+        is_heading = heading in HEADINGS or heading.startswith("AUTOMATED FINDINGS")
+        if is_heading:
+            ws.cell(row=row, column=1, value=heading).font = Font(
+                name="Calibri", bold=True, size=12, color="1F4E79")
             ws.cell(row=row, column=1).fill = PatternFill("solid", fgColor="D6E4F0")
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
         elif heading:
-            ws.cell(row=row, column=1, value=heading).font = Font(name="Calibri", bold=True, size=10)
+            cell = ws.cell(row=row, column=1, value=heading)
+            cell.font = Font(name="Calibri", bold=True, size=10)
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+            if heading.startswith("[CRITICAL]"):
+                cell.font = Font(name="Calibri", bold=True, size=10, color="C00000")
+            elif heading.startswith("[WARNING]"):
+                cell.font = Font(name="Calibri", bold=True, size=10, color="BF8F00")
             if detail:
-                ws.cell(row=row, column=2, value=detail).font = Font(name="Calibri", size=10, italic=True)
-                ws.cell(row=row, column=2).alignment = Alignment(wrap_text=True)
+                d = ws.cell(row=row, column=2, value=detail)
+                d.font = Font(name="Calibri", size=10, italic=True)
+                d.alignment = Alignment(wrap_text=True, vertical="top")
         row += 1
-    
-    ws.column_dimensions["A"].width = 48
-    ws.column_dimensions["B"].width = 60
+
+    ws.column_dimensions["A"].width = 62
+    ws.column_dimensions["B"].width = 78
     ws.row_dimensions[1].height = 22
     ws.freeze_panes = "A4"
 
