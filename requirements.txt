@@ -29,14 +29,17 @@ packaging==26.3
 pandas==3.0.5
 patsy==1.0.3
 pillow==12.3.0
+playwright==1.62.0
 plotly==7.0.0
 protobuf==7.36.1
 pyarrow==25.0.1
 pydeck==0.9.3
 pyparsing==3.3.2
+pypdf==6.18.1
 python-dateutil==2.9.0.post0
 python-multipart==0.0.32
 referencing==0.37.0
+reportlab==5.0.1
 requests==2.34.2
 rpds-py==2026.6.3
 scikit-learn==1.9.1

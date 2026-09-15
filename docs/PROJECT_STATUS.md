@@ -289,6 +289,36 @@ financial_reporting_ai/
   - Multi-currency statements are out of scope, consistent with the rest of the platform.
 - **Status**: COMPLETE / AWAITING USER REVIEW
 
+### PR: Project Overview PDF + Automated Interface Capture
+- **Files Created**: `src/capture_screenshots.py`, `src/generate_project_pdf.py`, `docs/screenshots/` (6 PNGs), `docs/figures/` (2 generated images), `reports/Financial_Reporting_AI_Project_Overview.pdf`
+- **Files Modified**: `requirements.txt` (+`playwright`, `reportlab`, `pypdf`)
+- **Deliverable**: an 11-page recruiter-facing PDF presenting the whole project — cover, executive summary, business problem, architecture, key results, features delivered, three pages of live interface screenshots, honest limitations, closing.
+
+- **`capture_screenshots.py`**: launches `dashboard/app.py` headlessly on port 8501, drives it with a real Chromium browser via Playwright at 1440×900, and captures one PNG per section into `docs/screenshots/`. Before each shot the viewport is grown to that section's own content height (capped at 1600px so the image stays close enough to landscape to read at half-page size in the PDF), and uniform blank padding below the last rendered content is trimmed — only rows identical to the bottom-most row, so no content can be lost. The Streamlit process is stopped via its process group in a `finally` block.
+  - **Upload screenshot uses real data.** The script writes the project's own General Ledger sheet out as a CSV and uploads it through the real file input, so `05_upload_feature.png` shows an actual detection result (General Ledger, 100.0% confidence, 200 × 8) rather than an empty uploader.
+  - **No placeholder is ever written.** Each section has a `ready_text` that must appear before the capture, and any image under 20KB is treated as blank. A section that fails is named in the capture report with its reason and the script exits non-zero.
+  - Captured: 6/6 — `01_executive_summary`, `02_financial_statements`, `03_ratios_working_capital`, `04_scenario_analysis`, `05_upload_feature`, `06_controls_ai` (202KB–380KB each, 2880px wide at device scale 2).
+
+- **`generate_project_pdf.py`**: builds the PDF with ReportLab (navy/teal palette, page numbers, section headers, two-column feature checklist) plus two Matplotlib-generated images — the architecture flow diagram and a Revenue vs Total Costs chart.
+  - **Every figure is computed at build time** by `compute_statements()` — the same engine path the dashboard uses — rather than transcribed. The build **asserts** that the balance sheet balances and the cash flow reconciles, so the report cannot claim either after it stops being true.
+  - **The build refuses to produce a gap**: all six screenshots must exist and exceed 20KB or the build stops with the list of what is missing.
+  - **Self-verification**: page count is read back from the written file with `pypdf` and cross-checked against the build's own count; both must equal 11, the header must be `%PDF-`, and the file must exceed 100KB — otherwise it exits non-zero.
+- **Validations Passed**:
+  - PDF: 11 pages (both counts agree), 1.97MB, valid header, 6 screenshots embedded.
+  - Every number in the PDF traced to engine output: Revenue 897,000 · Gross Profit 614,400 · Net Loss (1,216,800) · Total Assets 10,509,300 · Closing Cash 960,100 (from Opening 3,000,000) · Current Ratio 0.62x · NWC (2,225,400) · DPO 1826 days · Salaries 1,048,200 (117% of revenue) · Gross Margin 68.5% · 17 ratios · 29 COA accounts · 29 TB rows · 200 GL lines · 4 ML anomalies · 3 outliers / 16 round-number / 58 weekend findings.
+  - Non-engine claims re-verified against the code, not against this document: **106** column aliases (counted from `DEFAULT_COLUMN_ALIASES`), **ten** validation check families (counted from `checks_run` in `validation_engine.py` — an earlier draft said nine), `tests/test_financials.py` **6/6**, `tests/test_acceptance.py` **51/51**.
+  - All 11 pages rendered to images and visually reviewed. Four layout defects found and fixed: the architecture diagram's fourth box was being clipped by the Matplotlib axis limit; the tech-stack table overflowed the right margin (cells now wrap as Paragraphs); the stacked-bar chart's thin Finance Costs band and the Net Loss callout overprinted their neighbours; and `&` in two captions was being swallowed as an XML entity.
+  - **Check marks render**: `ZapfDingbats` was not resolved by every renderer, so the checklist bullet uses `DejaVuSans` (ships with Matplotlib, already a dependency) registered as a TTF.
+- **Limitations**:
+  - Screenshots capture each section to a 1600px depth cap, so a very long section (the Executive Summary's full action plan) continues below the captured region. This is a presentation choice for legibility, not a rendering failure.
+  - `02_financial_statements.png` shows the P&L tab with Streamlit's own internally-scrolled dataframe, so the statement is cut at Gross Profit exactly as it appears on screen.
+  - Port 8501 must be free; the capture refuses to run against an already-running Streamlit instance rather than screenshotting an app it did not launch.
+- **Regeneration (capture + build, one command, from the project root, using the project venv)**:
+  ```bash
+  .venv/bin/python -m src.capture_screenshots && .venv/bin/python -m src.generate_project_pdf
+  ```
+- **Status**: COMPLETE / AWAITING USER REVIEW
+
 ## HOUSEKEEPING / MAINTENANCE LOG
 
 ### H1-H3: Packaging & Column-Alias Fixes (pre-UP3)
@@ -311,6 +341,7 @@ financial_reporting_ai/
 - **None for core project** (Phases 1-10 complete).
 - **Upload Feature UP1–UP6 all COMPLETE.** 42/42 acceptance criteria pass (`python tests/test_acceptance.py`).
 - Bank Reconciliation (Month-End Close item 1) now functional — see the BR entry.
+- **Project Overview PDF** (`reports/Financial_Reporting_AI_Project_Overview.pdf`, 11 pages) and its automated interface capture are built — see the PR entry for the one-command regeneration.
 - **Open item**: two generated report files are tracked in git and present in history — see the UP6 entry's outstanding privacy issue.
 - **No blockers.** The source dataset has been restored, `tests/test_financials.py` passes 6/6, and all 8 dashboard sections render.
 
@@ -324,6 +355,14 @@ financial_reporting_ai/
   ```powershell
   python tests/test_financials.py
   ```
+- **Regenerate the Project Overview PDF** (captures the live dashboard, then builds the report).
+  Run from the project root with the project's virtual environment — the system Python has none
+  of these dependencies:
+  ```bash
+  .venv/bin/python -m src.capture_screenshots && .venv/bin/python -m src.generate_project_pdf
+  ```
+  Requires `.venv/bin/playwright install chromium` once. Port 8501 must be free.
+  Output: `reports/Financial_Reporting_AI_Project_Overview.pdf`.
 
 ## RULES FOR THE NEXT AI AGENT PICKING THIS UP
 - **Project is in a completed state**. Any future modifications should be treated as v2.0 enhancements.
